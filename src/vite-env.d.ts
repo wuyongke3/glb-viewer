@@ -9,4 +9,8 @@ declare module '*.vue' {
 interface Window {
   // expose in the `electron/preload/index.ts`
   ipcRenderer: import('electron').IpcRenderer
+  electronAPI: {
+    checkGlbCache: (filePath: string) => Promise<{ cached: boolean; filePath: string | null }>
+    readGlbFile: (filePath: string) => Promise<ArrayBuffer>
+  }
 }

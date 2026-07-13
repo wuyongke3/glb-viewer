@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // ...
 })
 
+// 暴露 GLB 文件相关 API
+contextBridge.exposeInMainWorld('electronAPI', {
+  checkGlbCache: (filePath: string) => ipcRenderer.invoke('glb-cache:check', filePath),
+  readGlbFile: (filePath: string) => ipcRenderer.invoke('glb-file:read', filePath),
+})
+
 // --------- Preload scripts loading ---------
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
   return new Promise((resolve) => {

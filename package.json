@@ -21,13 +21,17 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",
-    "electron": "^42.1.0",
+    "electron": "^42.6.1",
     "electron-builder": "^26.8.1",
+    "less": "^4.6.7",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vite-plugin-electron": "^1.0.1",
     "vite-plugin-electron-renderer": "^1.0.0",
     "vue": "^3.5.35",
     "vue-tsc": "^3.3.3"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
   }
 }
