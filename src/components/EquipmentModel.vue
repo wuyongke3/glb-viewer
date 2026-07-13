@@ -1,19 +1,22 @@
 <template>
-  <div id="uploader">
-    <div
-      class="file-preview"
-      @dragover.prevent="onDragOver"
-      @dragleave.prevent="onDragLeave"
-      @drop.prevent="onDrop"
-      :class="{ 'drag-over': isDragOver }"
-    >
-      <span v-if="!currentFile">拖拽GLB文件到此处</span>
+  <div ref="containerRef" class="container" @dragover.prevent="onDragOver" @dragleave.prevent="onDragLeave"
+    @drop.prevent="onDrop">
+    <!-- 拖拽提示层：只在拖拽时显示 -->
+    <div id="uploader" :class="{ 'drag-over': isDragOver }">
+      <span v-if="!currentFile && !isDragOver">拖拽GLB文件到此处</span>
     </div>
     <div class="file-info">
-      <div class="file-name">文件路径：{{ filePath || "未选择文件" }}</div>
+      <div class="file-name" @dblclick="copyFilePath" :title="filePath || '未选择文件'">文件路径：{{ filePath || "未选择文件" }}</div>
     </div>
+    <div ref="modelContainerRef" class="model-container" @dragover.prevent="onDragOver" @drop.prevent="onDrop"></div>
+
+    <!-- 复制成功提示 -->
+    <Transition name="toast">
+      <div v-if="showCopyToast" class="copy-toast">
+        <span>已复制：{{ filePath }}</span>
+      </div>
+    </Transition>
   </div>
-  <div ref="modelContainerRef" class="model-container"></div>
 </template>
 
 <script setup lang="ts">
@@ -26,6 +29,7 @@ import {
   nextTick,
   computed,
 } from "vue";
+import { useElementVisibility } from "@vueuse/core";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -38,19 +42,22 @@ const props = withDefaults(defineProps<Props>(), {
   autoRotate: false,
 });
 
-// 从store中获取设备名称和模型URL
-const equipmentName = computed(() => {
-  return "设备模型";
-});
 
+// 默认不加载远程模型，等待用户拖拽文件
 const modelUrl = computed(() => {
-  return "http://10.143.232.32:10065/szls-glbs/GYGC/GYGC_JZ06.glb";
+  return "";
 });
 
 const modelContainerRef = ref<HTMLElement | null>(null);
+const containerRef = ref<HTMLElement | null>(null);
+
+// 检测组件可见性，不可见时暂停渲染
+const isVisible = useElementVisibility(containerRef);
+
 const isDragOver = ref(false);
 const currentFile = ref<File | null>(null);
 const filePath = ref("");
+const showCopyToast = ref(false);
 let objectUrl: string | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
@@ -226,6 +233,8 @@ const createPlaceholderModel = () => {
 
 const animate = () => {
   animationId = requestAnimationFrame(animate);
+  // 不可见时暂停渲染，节省 GPU 资源
+  if (!isVisible.value) return;
   controls?.update();
   renderer?.render(scene!, camera!);
 };
@@ -239,13 +248,46 @@ const handleResize = () => {
   renderer.setSize(width, height);
 };
 
+// 复制文件路径到剪贴板
+const copyFilePath = async () => {
+  if (!filePath.value) return;
+  try {
+    await navigator.clipboard.writeText(filePath.value);
+  } catch {
+    // 降级方案
+    const input = document.createElement('input');
+    input.value = filePath.value;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+  // 显示复制成功提示
+  showCopyToast.value = true;
+  setTimeout(() => {
+    showCopyToast.value = false;
+  }, 2000);
+};
+
 // 拖拽事件处理
 const onDragOver = (e: DragEvent) => {
   isDragOver.value = true;
 };
 
 const onDragLeave = (e: DragEvent) => {
-  isDragOver.value = false;
+  // 检查是否真的离开了容器（而不是进入子元素）
+  const rect = containerRef.value?.getBoundingClientRect();
+  if (rect) {
+    const { clientX, clientY } = e;
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      isDragOver.value = false;
+    }
+  }
 };
 
 const onDrop = async (e: DragEvent) => {
@@ -263,8 +305,8 @@ const onDrop = async (e: DragEvent) => {
 
   // 判断是否在 Electron 环境中
   if (window.electronAPI) {
-    // Electron 中 File 对象有 path 属性，可获取绝对路径
-    const absPath = (file as any).path as string;
+    // 使用 webUtils.getPathForFile 获取绝对路径
+    const absPath = window.electronAPI.getFilePath(file);
 
     if (!absPath) {
       // 降级：使用 Blob URL 方式
@@ -341,34 +383,65 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (animationId) {
     cancelAnimationFrame(animationId);
+    animationId = null;
   }
   if (objectUrl) {
     URL.revokeObjectURL(objectUrl);
+    objectUrl = null;
   }
   if (resizeObserver) {
     resizeObserver.disconnect();
+    resizeObserver = null;
   }
+
+  // 清理模型资源
+  if (model) {
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.dispose());
+        } else {
+          child.material?.dispose();
+        }
+      }
+    });
+    scene?.remove(model);
+    model = null;
+  }
+
+  // 清理控制器
   if (controls) {
     controls.dispose();
+    controls = null;
   }
+
+  // 清理渲染器并强制释放 WebGL 上下文
   if (renderer) {
     renderer.dispose();
+    renderer.forceContextLoss();
     if (
       modelContainerRef.value &&
       renderer.domElement.parentNode === modelContainerRef.value
     ) {
       modelContainerRef.value.removeChild(renderer.domElement);
     }
+    renderer = null;
   }
-  renderer = null;
+
   scene = null;
   camera = null;
-  controls = null;
-  model = null;
 });
 </script>
 
 <style scoped lang="less">
+.container {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
 .model-content {
   padding: 0;
 }
@@ -387,45 +460,80 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 800px;
-  height: 400px;
+  width: 100%;
+  height: 100%;
   z-index: 9999;
-  background: rgba(214, 214, 214, 0.09);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed transparent;
+  transition: all 0.3s ease;
+  // 默认不阻挡鼠标事件，但保留拖拽事件
+  pointer-events: none;
+
+  span {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  // 拖拽状态：显示提示
+  &.drag-over {
+    border-color: #1e9cff;
+    background: rgba(30, 156, 255, 0.1);
+  }
+}
+
+.file-info {
+  box-sizing: border-box;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 9999;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background-color: hsl(240, 4%, 11%);
+
+  .file-name {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+}
+
+// 复制成功提示
+.copy-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  background: rgba(30, 156, 255, 0.95);
   color: #fff;
+  border-radius: 6px;
+  font-size: 14px;
+  z-index: 10000;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .file-preview {
-    width: 100%;
-    height: calc(100% - 40px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px dashed rgba(255, 255, 255, 0.3);
-    transition: all 0.3s ease;
+// toast 动画
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
 
-    &.drag-over {
-      border-color: #1e9cff;
-      background: rgba(30, 156, 255, 0.1);
-    }
-
-    span {
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 14px;
-    }
-  }
-
-  .file-info {
-    height: 40px;
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-
-    .file-name {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
 }
 </style>

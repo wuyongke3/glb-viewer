@@ -12,5 +12,6 @@ interface Window {
   electronAPI: {
     checkGlbCache: (filePath: string) => Promise<{ cached: boolean; filePath: string | null }>
     readGlbFile: (filePath: string) => Promise<ArrayBuffer>
+    getFilePath: (file: File) => string
   }
 }

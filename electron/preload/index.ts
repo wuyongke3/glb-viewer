@@ -1,4 +1,4 @@
-import { ipcRenderer, contextBridge } from 'electron'
+import { ipcRenderer, contextBridge, webUtils } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 contextBridge.exposeInMainWorld('electronAPI', {
   checkGlbCache: (filePath: string) => ipcRenderer.invoke('glb-cache:check', filePath),
   readGlbFile: (filePath: string) => ipcRenderer.invoke('glb-file:read', filePath),
+  // 获取文件的绝对路径
+  getFilePath: (file: File) => webUtils.getPathForFile(file),
 })
 
 // --------- Preload scripts loading ---------
