@@ -1,22 +1,23 @@
 {
-  "name": "electron-vue-vite",
-  "version": "28.1.0",
+  "name": "glb-viewer",
+  "version": "1.0.0",
   "main": "dist-electron/main/index.js",
-  "description": "Really simple Electron + Vue + Vite boilerplate.",
+  "description": "GLB 3D模型预览工具",
   "author": "草鞋没号 <308487730@qq.com>",
   "license": "MIT",
   "private": true,
   "keywords": [
     "electron",
-    "rollup",
-    "vite",
-    "vue3",
-    "vue"
+    "glb",
+    "3d",
+    "viewer"
   ],
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "build:win": "vue-tsc --noEmit && vite build && electron-builder --win --x64",
+    "build:mac": "vue-tsc --noEmit && vite build && electron-builder --mac",
     "preview": "vite preview"
   },
   "devDependencies": {

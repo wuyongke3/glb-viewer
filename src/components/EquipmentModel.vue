@@ -30,8 +30,11 @@ import {
   computed,
 } from "vue";
 import { useElementVisibility } from "@vueuse/core";
+//@ts-ignore
 import * as THREE from "three";
+//@ts-ignore
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+//@ts-ignore
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 interface Props {
@@ -125,15 +128,15 @@ const loadModel = (url: string) => {
   const loader = new GLTFLoader();
   loader.load(
     url,
-    (gltf) => {
+    (gltf: THREE.GLTFLoader) => {
       if (model) {
         scene!.remove(model);
         // 释放旧模型的几何体和材质
-        model.traverse((child) => {
+        model.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh) {
             child.geometry?.dispose();
             if (Array.isArray(child.material)) {
-              child.material.forEach((m) => m.dispose());
+              child.material.forEach((m: THREE.Material | THREE.MaterialArray) => m.dispose());
             } else {
               child.material?.dispose();
             }
@@ -163,7 +166,7 @@ const loadModel = (url: string) => {
       controls!.update();
     },
     undefined,
-    (error) => {
+    (error: THREE.ErrorEvent) => {
       console.error("加载GLB模型失败:", error);
       createPlaceholderModel();
     },
@@ -176,15 +179,15 @@ const loadModelFromArrayBuffer = (arrayBuffer: ArrayBuffer) => {
   loader.parse(
     arrayBuffer,
     "",
-    (gltf) => {
+    (gltf: THREE.GLTFLoader) => {
       if (model) {
         scene!.remove(model);
         // 释放旧模型的几何体和材质
-        model.traverse((child) => {
+        model.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh) {
             child.geometry?.dispose();
             if (Array.isArray(child.material)) {
-              child.material.forEach((m) => m.dispose());
+              child.material.forEach((m: THREE.Material | THREE.MaterialArray) => m.dispose());
             } else {
               child.material?.dispose();
             }
@@ -213,7 +216,7 @@ const loadModelFromArrayBuffer = (arrayBuffer: ArrayBuffer) => {
       camera!.lookAt(0, 0, 0);
       controls!.update();
     },
-    (error) => {
+    (error: THREE.ErrorEvent) => {
       console.error("解析GLB模型失败:", error);
       createPlaceholderModel();
     },
@@ -396,11 +399,11 @@ onBeforeUnmount(() => {
 
   // 清理模型资源
   if (model) {
-    model.traverse((child) => {
+    model.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry?.dispose();
         if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose());
+          child.material.forEach((m: THREE.Material | THREE.MaterialArray) => m.dispose());
         } else {
           child.material?.dispose();
         }
