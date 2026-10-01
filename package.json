@@ -33,7 +33,7 @@
     "vue-tsc": "^3.3.3"
   },
   "dependencies": {
-    "@vueuse/core": "^14.3.0",
+    "@vueuse/core": "^15.0.0",
     "@vueuse/shared": "^14.3.0",
     "three": "^0.185.1"
   }
